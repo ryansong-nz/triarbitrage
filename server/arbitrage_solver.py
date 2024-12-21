@@ -4,8 +4,9 @@ import csv
 from math import log, exp
 
 def reconstruct_path(prev, start, end):
+    print(prev)
     path = []
-    while end is not None:
+    while end is not None and end not in path:
         path.append(end)
         end = prev[end]
     return path[::-1]
@@ -42,22 +43,31 @@ class ArbitrageSolver:
             raise ValueError("Timestamp not set")
     
         data = self.setup_data_for([(from_currency, "FROM"), (to_currency, "TO")])
-        es = {(d["index"][:3].upper(), d["index"][3:].upper()) : -log(d["midPrice"])for d in data if d["midPrice"] }
-        # find the shortest path from from_currency to to_currency with minimal cost
+        es = {(d["index"][:3].upper(), d["index"][3:].upper()) : -log(d["midPrice"]) for d in data if d["midPrice"]}
+        direct = es.get((from_currency, to_currency), None)
+        direct_res = exp(direct) if direct else None
+        traded = set()
+
         # implementation: bellman-ford's algorithm
-        # return the cost
         vs = major_currency_symbols
         dist = {v: float('inf') for v in vs}
         prev = {v: None for v in vs}
     
         dist[from_currency] = 0.0
 
-        for i in range(len(vs) - 1):
+        for _ in range(len(vs) - 1):
             for (u, v), w in es.items():
+                if (u, v) == (from_currency, to_currency) or (v, u) == (from_currency, to_currency):
+                    # skip trivial conversion
+                    continue
+                if v in traded:
+                    # skip traded currencies (cycle detection)
+                    continue
                 if dist[u] + w < dist[v]:
+                    traded.add(v)
                     dist[v] = dist[u] + w
                     prev[v] = u
 
         path = reconstruct_path(prev, from_currency, to_currency)
             
-        return exp(dist[to_currency]), path
+        return exp(dist[to_currency]), direct_res, path
